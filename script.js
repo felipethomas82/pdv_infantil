@@ -46,11 +46,14 @@ const elements = {
   productManagementList: document.getElementById('productManagementList'),
 };
 
+// Estado da aplicação: sempre o que o módulo storage.js devolve. Este arquivo
+// não mantém cópia própria nem reimplementa leitura, escrita ou mutações.
 let appState = {
   products: [],
   cart: [],
   paymentMethod: 'dinheiro',
   moneyReceived: 0,
+  manualPaymentAmount: null,
   sales: [],
   boxTotals: {
     geral: 0,
@@ -58,7 +61,7 @@ let appState = {
     pix: 0,
   },
   cashbox: {
-    password: '1234',
+    password: '',
     totalCash: 0,
     totalPix: 0,
     totalGeneral: 0,
@@ -66,75 +69,84 @@ let appState = {
   pixPayloadBase: '',
 };
 
-function readDefaultState() {
-  if (window.pdvStorage && typeof window.pdvStorage.getDefaultState === 'function') {
-    return window.pdvStorage.getDefaultState();
+// Diálogos modais: um único aberto por vez, com foco e tecla Esc tratados aqui.
+const modalState = {
+  current: null,
+  trigger: null,
+};
+
+function getFocusableElements(container) {
+  return Array.from(
+    container.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])'),
+  ).filter((element) => !element.disabled && element.offsetParent !== null);
+}
+
+function hideModal(modal) {
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function openModal(modal, options = {}) {
+  if (!modal) {
+    return;
   }
 
-  return {
-    products: [
-      { id: 'chaveiro', name: 'Chaveiro', price: 1000, icon: 'chaveiro.png', initialStock: 5, stock: 5 },
-      { id: 'mandala', name: 'Mandala', price: 1800, icon: 'mandala.png', initialStock: 4, stock: 4 },
-      { id: 'borracinha', name: 'Borracinha de Cabelo', price: 1200, icon: 'borrachinha.png', initialStock: 3, stock: 3 },
-    ],
-    cart: [],
-    paymentMethod: 'dinheiro',
-    moneyReceived: 0,
-    sales: [],
-    boxTotals: { geral: 0, dinheiro: 0, pix: 0 },
-    cashbox: { password: '1234', totalCash: 0, totalPix: 0, totalGeneral: 0 },
-    pixPayloadBase: '00020126580014BR.GOV.BCB.PIX0136fd8ccf4b-42fc-4668-bf63-103022ef8496520400005303986540510.005802BR5920Melissa Souza Thomas6009SAO PAULO62140510dhBlxKOfAk63046C3D',
-  };
+  const previous = modalState.current;
+  const focusOrigin = options.trigger || document.activeElement;
+  const cameFromOutsideModal = focusOrigin instanceof HTMLElement
+    && !modal.contains(focusOrigin)
+    && !(previous && previous.contains(focusOrigin));
+
+  if (previous && previous !== modal) {
+    hideModal(previous);
+  }
+
+  if (cameFromOutsideModal) {
+    modalState.trigger = focusOrigin;
+  }
+
+  modalState.current = modal;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+
+  const focusTarget = options.initialFocus || getFocusableElements(modal)[0];
+
+  if (focusTarget) {
+    focusTarget.focus();
+  }
+}
+
+function closeModal(modal) {
+  const target = modal || modalState.current;
+
+  if (!target || target.classList.contains('hidden')) {
+    return;
+  }
+
+  hideModal(target);
+
+  if (modalState.current === target) {
+    modalState.current = null;
+  }
+
+  const trigger = modalState.trigger;
+  modalState.trigger = null;
+
+  if (trigger && document.contains(trigger) && !trigger.closest('.modal')) {
+    trigger.focus();
+  }
 }
 
 function loadState() {
-  if (window.pdvStorage && typeof window.pdvStorage.getState === 'function') {
-    appState = window.pdvStorage.getState();
-    return;
-  }
-
-  const safeDefault = readDefaultState();
-  const rawState = localStorage.getItem('pdv_infantil_state');
-
-  if (!rawState) {
-    appState = safeDefault;
-    return;
-  }
-
-  try {
-    const parsedState = JSON.parse(rawState);
-    appState = {
-      ...safeDefault,
-      ...parsedState,
-      products: Array.isArray(parsedState?.products) && parsedState.products.length ? parsedState.products : safeDefault.products,
-      cart: Array.isArray(parsedState?.cart) ? parsedState.cart : [],
-      sales: Array.isArray(parsedState?.sales) ? parsedState.sales : [],
-      boxTotals: {
-        geral: Number(parsedState?.boxTotals?.geral ?? parsedState?.cashbox?.totalGeneral ?? 0),
-        dinheiro: Number(parsedState?.boxTotals?.dinheiro ?? parsedState?.cashbox?.totalCash ?? 0),
-        pix: Number(parsedState?.boxTotals?.pix ?? parsedState?.cashbox?.totalPix ?? 0),
-      },
-      cashbox: {
-        password: String(parsedState?.cashbox?.password || '1234'),
-        totalCash: Number(parsedState?.cashbox?.totalCash ?? 0),
-        totalPix: Number(parsedState?.cashbox?.totalPix ?? 0),
-        totalGeneral: Number(parsedState?.cashbox?.totalGeneral ?? 0),
-      },
-      pixPayloadBase: String(parsedState?.pixPayloadBase || safeDefault.pixPayloadBase || ''),
-    };
-  } catch (error) {
-    console.warn('N�o foi poss�vel ler o estado salvo. Resetando.', error);
-    appState = safeDefault;
-  }
+  appState = window.pdvStorage.getState();
 }
 
-function saveState() {
-  if (window.pdvStorage && typeof window.pdvStorage.saveCurrentState === 'function') {
-    appState = window.pdvStorage.saveCurrentState(appState);
-    return;
-  }
+// Converte o valor digitado pelo operador em centavos, aceitando vírgula ou ponto.
+function parseCurrencyInput(value) {
+  const normalized = String(value ?? '').trim().replace(/\s/g, '').replace(',', '.');
+  const parsed = Number(normalized);
 
-  localStorage.setItem('pdv_infantil_state', JSON.stringify(appState));
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : null;
 }
 
 function bindEvents() {
@@ -144,29 +156,23 @@ function bindEvents() {
     }
 
     elements.paymentTotalValue.textContent = formatCurrency(getPaymentTotal());
-    elements.paymentModal.classList.remove('hidden');
-    elements.paymentModal.setAttribute('aria-hidden', 'false');
+    openModal(elements.paymentModal);
   });
 
-  elements.closePaymentBtn.addEventListener('click', closePaymentModal);
+  elements.closePaymentBtn.addEventListener('click', () => closeModal(elements.paymentModal));
   elements.paymentModal.addEventListener('click', (event) => {
     if (event.target.dataset.closePayment === 'true') {
-      closePaymentModal();
+      closeModal(elements.paymentModal);
     }
   });
 
   elements.paymentButtons.forEach((button) => {
     button.addEventListener('click', () => {
-      appState.paymentMethod = button.dataset.payment;
-      const isCash = appState.paymentMethod === 'dinheiro';
-
-      elements.paymentButtons.forEach((item) => item.classList.toggle('active', item === button));
-      elements.moneyPaymentPanel.classList.toggle('hidden', !isCash);
-      elements.pixPaymentPanel.classList.toggle('hidden', isCash);
+      appState = window.pdvStorage.setPaymentMethod(button.dataset.payment);
       elements.saleMessage.textContent = '';
+      renderPaymentPanels();
       updateTroco();
       renderPixQRCode();
-      saveState();
     });
   });
 
@@ -174,19 +180,13 @@ function bindEvents() {
     renderCashbox();
     elements.cashboxMessage.textContent = '';
     elements.cashboxPasswordInput.value = '';
-    elements.cashboxModal.classList.remove('hidden');
-    elements.cashboxModal.setAttribute('aria-hidden', 'false');
+    openModal(elements.cashboxModal);
   });
 
-  elements.closeCashboxBtn.addEventListener('click', () => {
-    elements.cashboxModal.classList.add('hidden');
-    elements.cashboxModal.setAttribute('aria-hidden', 'true');
-  });
-
+  elements.closeCashboxBtn.addEventListener('click', () => closeModal(elements.cashboxModal));
   elements.cashboxModal.addEventListener('click', (event) => {
     if (event.target.dataset.closeModal === 'true') {
-      elements.cashboxModal.classList.add('hidden');
-      elements.cashboxModal.setAttribute('aria-hidden', 'true');
+      closeModal(elements.cashboxModal);
     }
   });
 
@@ -197,12 +197,12 @@ function bindEvents() {
       return;
     }
 
-    const password = elements.cashboxPasswordInput.value;
-    const result = window.pdvStorage?.resetCashbox?.(password);
+    const result = window.pdvStorage.resetCashbox(elements.cashboxPasswordInput.value);
 
-    if (!result?.reset) {
+    if (!result.reset) {
       elements.cashboxMessage.textContent = 'Senha incorreta.';
       elements.cashboxMessage.classList.add('is-error');
+      elements.cashboxMessage.classList.remove('is-success');
       return;
     }
 
@@ -217,39 +217,38 @@ function bindEvents() {
   });
 
   elements.moneyReceivedInput.addEventListener('input', (event) => {
-    appState.moneyReceived = Number(event.target.value || 0) * 100;
+    const received = parseCurrencyInput(event.target.value);
+    appState = window.pdvStorage.setMoneyReceived(received === null ? 0 : received);
     updateTroco();
-    saveState();
   });
 
   elements.editPaymentAmountBtn.addEventListener('click', () => {
     elements.manualPaymentAmountInput.value = (getPaymentTotal() / 100).toFixed(2);
-    elements.paymentAmountModal.classList.remove('hidden');
-    elements.paymentAmountModal.setAttribute('aria-hidden', 'false');
-    elements.manualPaymentAmountInput.focus();
+    openModal(elements.paymentAmountModal, { initialFocus: elements.manualPaymentAmountInput });
     elements.manualPaymentAmountInput.select();
   });
 
   elements.paymentAmountForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    const amount = Math.round(Number(elements.manualPaymentAmountInput.value) * 100);
 
-    if (!Number.isFinite(amount) || amount < 0) {
+    const amount = parseCurrencyInput(elements.manualPaymentAmountInput.value);
+
+    if (amount === null) {
       return;
     }
 
-    appState.manualPaymentAmount = amount;
+    appState = window.pdvStorage.setManualPaymentAmount(amount);
     elements.saleMessage.textContent = '';
-    saveState();
+    elements.paymentTotalValue.textContent = formatCurrency(getPaymentTotal());
     renderCart();
-    closePaymentAmountModal();
+    closeModal(elements.paymentAmountModal);
   });
 
-  elements.closePaymentAmountBtn.addEventListener('click', closePaymentAmountModal);
-  elements.cancelPaymentAmountBtn.addEventListener('click', closePaymentAmountModal);
+  elements.closePaymentAmountBtn.addEventListener('click', () => closeModal(elements.paymentAmountModal));
+  elements.cancelPaymentAmountBtn.addEventListener('click', () => closeModal(elements.paymentAmountModal));
   elements.paymentAmountModal.addEventListener('click', (event) => {
     if (event.target.dataset.closePaymentAmount === 'true') {
-      closePaymentAmountModal();
+      closeModal(elements.paymentAmountModal);
     }
   });
 
@@ -263,14 +262,19 @@ function bindEvents() {
 
   elements.openProductManagementBtn.addEventListener('click', () => {
     renderProductManagement();
-    elements.productManagementModal.classList.remove('hidden');
-    elements.productManagementModal.setAttribute('aria-hidden', 'false');
+    openModal(elements.productManagementModal);
   });
 
-  elements.closeProductManagementBtn.addEventListener('click', closeProductManagement);
+  elements.closeProductManagementBtn.addEventListener('click', () => closeModal(elements.productManagementModal));
   elements.productManagementModal.addEventListener('click', (event) => {
     if (event.target.dataset.closeProductManagement === 'true') {
-      closeProductManagement();
+      closeModal(elements.productManagementModal);
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeModal();
     }
   });
 }
@@ -305,9 +309,8 @@ function getPaymentTotal() {
 
 function prefillMoneyReceived() {
   const total = getPaymentTotal();
-  appState.moneyReceived = total;
-  elements.moneyReceivedInput.value = total > 0 ? (total / 100).toFixed(2) : '';
-  saveState();
+  appState = window.pdvStorage.setMoneyReceived(total);
+  elements.moneyReceivedInput.value = total > 0 ? (total / 100).toFixed(2).replace('.', ',') : '';
 }
 
 function renderCatalog() {
@@ -400,62 +403,13 @@ function renderCart() {
 }
 
 function addToCart(productId) {
-  if (window.pdvStorage && typeof window.pdvStorage.addToCart === 'function') {
-    appState = window.pdvStorage.addToCart(productId);
-  } else {
-    const product = appState.products.find((item) => item.id === productId);
-
-    if (!product || product.stock <= 0) {
-      return;
-    }
-
-    const existingItem = appState.cart.find((item) => item.id === productId);
-    if (existingItem) {
-      existingItem.qty += 1;
-    } else {
-      appState.cart.push({ id: product.id, name: product.name, price: product.price, qty: 1 });
-    }
-
-    product.stock -= 1;
-    appState.manualPaymentAmount = null;
-    saveState();
-  }
-
+  appState = window.pdvStorage.addToCart(productId);
   renderCatalog();
   renderCart();
 }
 
 function updateCartQuantity(productId, delta) {
-  if (window.pdvStorage && typeof window.pdvStorage.updateCartQuantity === 'function') {
-    appState = window.pdvStorage.updateCartQuantity(productId, delta);
-  } else {
-    const product = appState.products.find((item) => item.id === productId);
-    const item = appState.cart.find((entry) => entry.id === productId);
-
-    if (!item || !product) {
-      return;
-    }
-
-    if (delta > 0) {
-      if (product.stock <= 0) {
-        return;
-      }
-
-      item.qty += 1;
-      product.stock -= 1;
-    } else {
-      item.qty -= 1;
-      product.stock += 1;
-
-      if (item.qty <= 0) {
-        appState.cart = appState.cart.filter((entry) => entry.id !== productId);
-      }
-    }
-
-    appState.manualPaymentAmount = null;
-    saveState();
-  }
-
+  appState = window.pdvStorage.updateCartQuantity(productId, delta);
   renderCatalog();
   renderCart();
 }
@@ -465,16 +419,11 @@ function clearCart() {
     return;
   }
 
-  appState.cart.forEach((item) => {
-    const product = appState.products.find((entry) => entry.id === item.id);
-    if (product) {
-      product.stock += item.qty;
-    }
-  });
+  if (!window.confirm('Descartar todos os itens do carrinho e devolver as unidades ao estoque?')) {
+    return;
+  }
 
-  appState.cart = [];
-  appState.manualPaymentAmount = null;
-  saveState();
+  appState = window.pdvStorage.clearCart();
   renderCatalog();
   renderCart();
 }
@@ -559,59 +508,40 @@ function finalizeSale() {
     return;
   }
 
-  if (window.pdvStorage && typeof window.pdvStorage.completeSale === 'function') {
-    const result = window.pdvStorage.completeSale();
-    appState = result.state;
-  } else {
-    const paymentMethod = appState.paymentMethod === 'pix' ? 'pix' : 'dinheiro';
-    appState.sales.push({
-      id: `venda-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      items: appState.cart.map((item) => ({ ...item })),
-      total,
-      paymentMethod,
-      moneyReceived: paymentMethod === 'dinheiro' ? received : total,
-      change: paymentMethod === 'dinheiro' ? received - total : 0,
-    });
-    appState.boxTotals[paymentMethod] += total;
-    appState.boxTotals.geral += total;
-    appState.cart = [];
-    appState.moneyReceived = 0;
-    appState.manualPaymentAmount = null;
-    saveState();
+  const result = window.pdvStorage.completeSale();
+
+  if (!result.sale) {
+    updateTroco();
+    return;
   }
 
+  appState = result.state;
   elements.moneyReceivedInput.value = '';
   elements.saleMessage.textContent = 'Venda finalizada com sucesso!';
+  elements.saleMessage.classList.remove('is-error');
   elements.saleMessage.classList.add('is-success');
+  closeModal(elements.paymentModal);
   renderCatalog();
   renderCart();
 }
 
-function closePaymentModal() {
-  elements.paymentModal.classList.add('hidden');
-  elements.paymentModal.setAttribute('aria-hidden', 'true');
-}
+function renderPaymentPanels() {
+  const isCash = appState.paymentMethod === 'dinheiro';
 
-function closePaymentAmountModal() {
-  elements.paymentAmountModal.classList.add('hidden');
-  elements.paymentAmountModal.setAttribute('aria-hidden', 'true');
-}
+  elements.paymentButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.payment === appState.paymentMethod);
+  });
 
-function closeProductManagement() {
-  elements.productManagementModal.classList.add('hidden');
-  elements.productManagementModal.setAttribute('aria-hidden', 'true');
+  elements.moneyPaymentPanel.classList.toggle('hidden', !isCash);
+  elements.pixPaymentPanel.classList.toggle('hidden', isCash);
 }
 
 function renderCashbox() {
-  const totals = appState.boxTotals || {};
-  const totalCash = Number(totals.dinheiro ?? appState.cashbox?.totalCash ?? 0);
-  const totalPix = Number(totals.pix ?? appState.cashbox?.totalPix ?? 0);
-  const totalGeneral = Number(totals.geral ?? appState.cashbox?.totalGeneral ?? totalCash + totalPix);
+  const totals = window.pdvStorage.getCashboxTotals(appState);
 
-  elements.modalTotalGeral.textContent = formatCurrency(totalGeneral);
-  elements.modalTotalDinheiro.textContent = formatCurrency(totalCash);
-  elements.modalTotalPix.textContent = formatCurrency(totalPix);
+  elements.modalTotalGeral.textContent = formatCurrency(totals.totalGeneral);
+  elements.modalTotalDinheiro.textContent = formatCurrency(totals.totalCash);
+  elements.modalTotalPix.textContent = formatCurrency(totals.totalPix);
 
   const salesByProduct = new Map();
   appState.sales.forEach((sale) => {
@@ -698,20 +628,13 @@ function renderProductManagement() {
       event.preventDefault();
       const formData = new FormData(row);
       const stock = Number(formData.get('stock'));
-      const price = Math.round(Number(formData.get('price')) * 100);
+      const price = parseCurrencyInput(formData.get('price'));
 
-      if (!Number.isFinite(stock) || stock < 0 || !Number.isFinite(price) || price < 0) {
+      if (!Number.isFinite(stock) || stock < 0 || price === null) {
         return;
       }
 
-      if (window.pdvStorage && typeof window.pdvStorage.updateProduct === 'function') {
-        appState = window.pdvStorage.updateProduct(product.id, { stock, price });
-      } else {
-        product.stock = Math.floor(stock);
-        product.price = price;
-        appState.cart = appState.cart.map((item) => item.id === product.id ? { ...item, price } : item);
-        saveState();
-      }
+      appState = window.pdvStorage.updateProduct(product.id, { stock, price });
 
       renderCatalog();
       renderCart();
@@ -725,20 +648,12 @@ function renderProductManagement() {
 function initializeApp() {
   loadState();
   bindEvents();
+  renderPaymentPanels();
   renderCatalog();
   renderCart();
-
-  const paymentButtons = Array.from(elements.paymentButtons);
-  const selectedButton = paymentButtons.find((button) => button.dataset.payment === appState.paymentMethod) || paymentButtons[0];
-
-  if (selectedButton) {
-    elements.paymentButtons.forEach((button) => button.classList.toggle('active', button === selectedButton));
-    const isCash = selectedButton.dataset.payment === 'dinheiro';
-    elements.moneyPaymentPanel.classList.toggle('hidden', !isCash);
-    elements.pixPaymentPanel.classList.toggle('hidden', isCash);
-  }
-
-  elements.moneyReceivedInput.value = appState.moneyReceived ? String(appState.moneyReceived / 100) : '';
+  elements.moneyReceivedInput.value = appState.moneyReceived
+    ? String(appState.moneyReceived / 100).replace('.', ',')
+    : '';
 }
 
 document.addEventListener('DOMContentLoaded', initializeApp);

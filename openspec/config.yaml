@@ -2,6 +2,36 @@ schema: spec-driven
 githubCopilot:
   cloudAgent: false
 
+context: |
+  Projeto: PDV Infantil Offline "Mãos que Criam" — ponto de venda web para uma feira
+  escolar de empreendedorismo, operado por uma criança do 5º ano em um tablet.
+
+  Stack: HTML5 + CSS3 + JavaScript ES6+ puro, sem framework, sem bundler e sem npm em
+  runtime. Os scripts são carregados como <script src> clássicos e a aplicação abre em
+  file://, onde módulos ES são bloqueados por CORS; por isso o estado fica exposto em
+  um módulo global (window.pdvStorage, definido em storage.js).
+
+  Restrição central: operação 100% offline, sem backend, sem API e sem CDN. qrcode.min.js,
+  Font Awesome e as fotos dos produtos vêm de pastas locais do repositório. A persistência
+  usa localStorage na chave pdv_infantil_state.
+
+  Arquitetura: storage.js é o dono único do estado (catálogo, carrinho, vendas, totais e
+  persistência); script.js apenas renderiza, trata eventos e formata valores. Todo valor
+  monetário é inteiro em centavos e só vira R$ na exibição, com Intl.NumberFormat('pt-BR').
+  O catálogo canônico de produtos e preços existe apenas em DEFAULT_PRODUCTS.
+
+  Convenções: documentação, specs, comentários e UI em português do Brasil. Os requirements
+  das specs usam o termo normativo da RFC 2119 junto do português — "DEVE (SHALL)" — porque
+  o validador do OpenSpec exige SHALL/MUST no corpo do requisito. Interface touch-first, com
+  alvos de toque de no mínimo 48px e sem digitação textual obrigatória durante a venda.
+
+  Fluxo de trabalho (OpenSpec): use `openspec list` e `openspec status --change "<nome>"`
+  para ver o estado; `openspec new change "<nome>"` para iniciar; os artefatos ficam em
+  openspec/changes/<nome>/ (proposal, specs, design, tasks); valide com
+  `openspec validate "<nome>" --strict` e finalize com `openspec archive`. As specs
+  publicadas vivem em openspec/specs/. Os documentos do SDD manual anterior estão em
+  docs/legacy/ e são apenas referência histórica.
+
 # Project context (optional)
 # This is shown to AI when creating artifacts.
 # Add your tech stack, conventions, style guides, domain knowledge, etc.
