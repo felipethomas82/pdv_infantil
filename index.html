@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDV Infantil - Feira do Empreendedor</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="modules/fontawesome/css/all.min.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Feira do Empreendedor Ases Educacional</p>
+          <h2>🧵 Mãos que Criam</h2>
+        </div>
+        <div class="header-actions">
+          <button id="openCashboxBtn" class="secondary-btn" type="button">
+            <i class="fa-solid fa-cash-register" aria-hidden="true"></i>
+            <span>Fechamento de Caixa</span>
+          </button>
+          <button id="openProductManagementBtn" class="secondary-btn" type="button">
+            <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+            <span>Gerenciar Produtos</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="app-main">
+        <section class="catalog-panel">
+          <div class="section-header">
+            <h2>Catálogo</h2>
+            <span class="pill">Produtos artesanais</span>
+          </div>
+
+          <div id="catalogGrid" class="catalog-grid" aria-live="polite"></div>
+        </section>
+
+        <aside class="cart-panel">
+          <div class="section-header">
+            <h2>Carrinho</h2>
+            <button id="clearCartBtn" class="ghost-btn" type="button">
+              <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+              <span>Limpar</span>
+            </button>
+          </div>
+
+          <div id="cartItems" class="cart-items" aria-live="polite"></div>
+
+          <div class="totals-panel">
+            <div class="total-row">
+              <span>Total</span>
+              <strong id="totalValue">R$ 0,00</strong>
+            </div>
+          </div>
+
+          <button id="editPaymentAmountBtn" class="ghost-btn" type="button">
+            <i class="fa-solid fa-pen" aria-hidden="true"></i>
+            <span>Editar valor a cobrar</span>
+          </button>
+          <button id="openPaymentBtn" class="primary-btn" type="button" disabled>
+            <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
+            <span>Pagamento</span>
+          </button>
+        </aside>
+      </main>
+    </div>
+
+    <div id="paymentModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-payment="true"></div>
+      <section class="modal-card payment-modal" role="dialog" aria-modal="true" aria-labelledby="paymentTitle">
+        <div class="modal-header">
+          <div>
+            <p class="modal-kicker">Total a cobrar</p>
+            <h2 id="paymentTitle">Pagamento</h2>
+          </div>
+          <button id="closePaymentBtn" class="icon-btn" type="button" aria-label="Voltar para o carrinho">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="payment-total">
+          <span>Total da venda</span>
+          <strong id="paymentTotalValue">R$ 0,00</strong>
+        </div>
+        <div class="payment-block">
+            <div class="payment-options">
+              <button class="payment-btn active" data-payment="dinheiro" type="button">
+                <i class="fa-solid fa-money-bill-wave" aria-hidden="true"></i>
+                <span>Dinheiro</span>
+              </button>
+              <button class="payment-btn" data-payment="pix" type="button">
+                <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                <span>PIX</span>
+              </button>
+            </div>
+
+            <div id="moneyPaymentPanel" class="payment-panel">
+              <label for="moneyReceivedInput">Valor recebido</label>
+              <input
+                id="moneyReceivedInput"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Ex.: 25,00"
+              />
+              <div class="change-box">
+                <span>Troco</span>
+                <strong id="changeValue">R$ 0,00</strong>
+              </div>
+              <p id="paymentValidationMessage" class="payment-message" role="alert" aria-live="polite"></p>
+            </div>
+
+            <div id="pixPaymentPanel" class="payment-panel hidden">
+              <div class="pix-box">
+                <div id="pixQRCode" class="qr-placeholder" aria-label="QR Code PIX"></div>
+                <p id="pixKeyText">PIX para o valor da venda</p>
+              </div>
+            </div>
+
+        </div>
+        <button id="finalizeSaleBtn" class="primary-btn" type="button" disabled>
+          <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+          <span>Finalizar Venda</span>
+        </button>
+        <p id="saleMessage" class="sale-message" role="status" aria-live="polite"></p>
+      </section>
+    </div>
+
+    <div id="paymentAmountModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-payment-amount="true"></div>
+      <form id="paymentAmountForm" class="modal-card payment-amount-modal" aria-labelledby="paymentAmountTitle">
+        <div class="modal-header">
+          <h2 id="paymentAmountTitle">Qual o valor total a ser cobrado?</h2>
+          <button id="closePaymentAmountBtn" class="icon-btn" type="button" aria-label="Fechar edição do valor">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+        <label for="manualPaymentAmountInput">Valor total</label>
+        <input id="manualPaymentAmountInput" type="number" min="0" step="0.01" required />
+        <div class="modal-actions">
+          <button id="cancelPaymentAmountBtn" class="ghost-btn" type="button">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            <span>Cancelar</span>
+          </button>
+          <button class="primary-btn" type="submit">
+            <i class="fa-solid fa-check" aria-hidden="true"></i>
+            <span>Confirmar valor</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div id="productManagementModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-product-management="true"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="productManagementTitle">
+        <div class="modal-header">
+          <h2 id="productManagementTitle">Gerenciar Produtos</h2>
+          <button id="closeProductManagementBtn" class="icon-btn" type="button" aria-label="Fechar gerenciamento de produtos">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="productManagementList" class="product-management-list"></div>
+      </div>
+    </div>
+
+    <div id="cashboxModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cashboxTitle">
+        <div class="modal-header">
+          <h2 id="cashboxTitle">Fechamento de Caixa</h2>
+          <button id="closeCashboxBtn" class="icon-btn" type="button" aria-label="Fechar fechamento de caixa">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="summary-grid">
+            <div class="summary-tile">
+              <span>Total Geral</span>
+              <strong id="modalTotalGeral">R$ 0,00</strong>
+            </div>
+            <div class="summary-tile">
+              <span>Dinheiro</span>
+              <strong id="modalTotalDinheiro">R$ 0,00</strong>
+            </div>
+            <div class="summary-tile">
+              <span>PIX</span>
+              <strong id="modalTotalPix">R$ 0,00</strong>
+            </div>
+          </div>
+
+          <div class="ranking-box">
+            <h3>Ranking de Vendas</h3>
+            <ul id="salesRanking" class="sales-ranking">
+              <li>Nenhuma venda registrada ainda.</li>
+            </ul>
+          </div>
+
+          <section class="sales-statement" aria-labelledby="salesStatementTitle">
+            <h3 id="salesStatementTitle">Extrato de Vendas</h3>
+            <div id="salesStatementList" class="sales-statement-list" aria-live="polite"></div>
+          </section>
+
+          <form id="resetCashboxForm" class="cashbox-reset-form">
+            <h3>Novo Dia</h3>
+            <label for="cashboxPasswordInput">Senha para resetar o caixa</label>
+            <input id="cashboxPasswordInput" type="password" required autocomplete="off" />
+            <div class="modal-actions">
+              <button class="ghost-btn" type="reset">
+                <i class="fa-solid fa-eraser" aria-hidden="true"></i>
+                <span>Limpar</span>
+              </button>
+              <button class="primary-btn" type="submit">
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                <span>Resetar caixa</span>
+              </button>
+            </div>
+            <p id="cashboxMessage" class="payment-message" role="alert" aria-live="polite"></p>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script src="modules/qrcode.min.js"></script>
+    <script src="storage.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
