@@ -1,0 +1,17 @@
+# Arquivos de sistema operacional
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Arquivos temporários de editor
+*~
+*.tmp
+*.bak
